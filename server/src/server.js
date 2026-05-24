@@ -1,104 +1,101 @@
-import { useEffect, useState } from "react";
-import Sidebar from "../components/Sidebar";
-import ChatWindow from "../components/ChatWindow";
-import API from "../services/api";
-import socket from "../socket";
+import express from "express";
+import dotenv from "dotenv";
+import cors from "cors";
+import connectDB from "./config/db.js";
 
-function Chat() {
-  const [selectedChat, setSelectedChat] =
-    useState(null);
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
+import messageRoutes from "./routes/messageRoutes.js";
 
-  const [messages, setMessages] =
-    useState([]);
+import http from "http";
+import { Server } from "socket.io";
 
-  const [userChats, setUserChats] =
-    useState([]);
+dotenv.config();
 
-  const currentUser = JSON.parse(
-    localStorage.getItem("user")
-  );
+connectDB();
 
-  useEffect(() => {
-    if (currentUser?._id) {
-      socket.emit("join", currentUser._id);
-    }
+const app = express();
 
-    fetchChats();
-  }, []);
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  })
+);
 
-  const fetchChats = async () => {
-    try {
-      const res = await API.get("/chats");
+app.use(express.json());
 
-      setUserChats(res.data);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/chats", chatRoutes);
+app.use("/api/messages", messageRoutes);
 
-  const openChat = async (chat) => {
-    setSelectedChat(chat);
+const server = http.createServer(app);
 
-    try {
-      const res = await API.get(
-        `/messages/${chat._id}`
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
+let onlineUsers = {};
+
+io.on("connection", (socket) => {
+  socket.on("join", (userId) => {
+    onlineUsers[userId] = socket.id;
+  });
+
+  socket.on("send_message", (data) => {
+    const receiverSocket =
+      onlineUsers[data.receiverId];
+
+    if (receiverSocket) {
+      io.to(receiverSocket).emit(
+        "receive_message",
+        data
       );
-
-      setMessages(res.data);
-    } catch (error) {
-      console.log(error);
     }
-  };
+  });
 
-  useEffect(() => {
-    socket.on("receive_message", (data) => {
-      const incomingChatId =
-        typeof data.chatId === "object"
-          ? data.chatId._id
-          : data.chatId;
+  socket.on("typing", (data) => {
+    const receiverSocket =
+      onlineUsers[data.receiverId];
 
+    if (receiverSocket) {
+      io.to(receiverSocket).emit(
+        "typing",
+        data
+      );
+    }
+  });
+
+  socket.on("stop_typing", (data) => {
+    const receiverSocket =
+      onlineUsers[data.receiverId];
+
+    if (receiverSocket) {
+      io.to(receiverSocket).emit(
+        "stop_typing"
+      );
+    }
+  });
+
+  socket.on("disconnect", () => {
+    for (let userId in onlineUsers) {
       if (
-        selectedChat &&
-        incomingChatId === selectedChat._id
+        onlineUsers[userId] === socket.id
       ) {
-        setMessages((prev) => {
-          const exists = prev.some(
-            (msg) => msg._id === data._id
-          );
-
-          if (exists) return prev;
-
-          return [...prev, data];
-        });
+        delete onlineUsers[userId];
       }
+    }
+  });
+});
 
-      fetchChats();
-    });
+const PORT = process.env.PORT || 5000;
 
-    return () => {
-      socket.off("receive_message");
-    };
-  }, [selectedChat]);
-
-  return (
-    <div className="h-screen flex bg-[#0b141a]">
-      <Sidebar
-        currentUser={currentUser}
-        userChats={userChats}
-        fetchChats={fetchChats}
-        openChat={openChat}
-        selectedChat={selectedChat}
-      />
-
-      <ChatWindow
-        currentUser={currentUser}
-        selectedChat={selectedChat}
-        messages={messages}
-        setMessages={setMessages}
-        socket={socket}
-      />
-    </div>
+server.listen(PORT, () => {
+  console.log(
+    `Server running on port ${PORT}`
   );
-}
-
-export default Chat;
+});
