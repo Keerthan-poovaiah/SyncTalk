@@ -19,7 +19,7 @@ function MessageBubble({
       }`}
     >
       <div
-        className={`px-4 py-3 rounded-2xl text-white max-w-[60%] break-words ${
+        className={`px-4 py-3 rounded-2xl text-white max-w-[60%] wrap-break-words ${
           isSender
             ? "bg-green-600 rounded-br-none"
             : "bg-[#202c33] rounded-bl-none"

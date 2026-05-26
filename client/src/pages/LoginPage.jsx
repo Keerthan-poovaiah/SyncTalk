@@ -25,7 +25,7 @@ function Login() {
 
   return (
     <div className="h-screen flex items-center justify-center bg-[#111b21]">
-      <div className="bg-[#202c33] p-8 rounded-2xl w-[400px] shadow-lg">
+      <div className="bg-[#202c33] p-8 rounded-2xl w-100 shadow-lg">
         <h1 className="text-3xl text-green-500 mb-6 text-center font-bold">
           SyncTalk
         </h1>
